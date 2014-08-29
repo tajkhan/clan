@@ -51,6 +51,7 @@
 #include <osl/extensions/coordinates.h>
 #include <osl/extensions/clay.h>
 #include <osl/extensions/extbody.h>
+#include <osl/extensions/symbols.h>
 #include <osl/generic.h>
 #include <osl/body.h>
 #include <osl/scop.h>
@@ -58,6 +59,7 @@
 #include <clan/macros.h>
 #include <clan/options.h>
 #include <clan/relation.h>
+#include <clan/symbol.h>
 #include <clan/statement.h>
 #include <clan/scop.h>
 
@@ -508,4 +510,25 @@ void clan_scop_simplify(osl_scop_p scop) {
     }
     scop = scop->next;
   }
+}
+
+
+/**
+ * clan_scop_generate_symbols function:
+ * this function generates a osl_symbols extension for the scop passed as
+ * an argument. 
+ * \param[in,out] scop   The scop to add a osl_symbols extension to.
+ * \param[in]     symbol Pointer to the top of symbol table.
+ */
+void clan_scop_generate_symbols(osl_scop_p scop, osl_symbols_p symbol) {
+  osl_symbols_p sym = NULL;
+  osl_generic_p sym_gen = NULL;
+
+  if(scop==NULL || symbol==NULL)
+    return;
+
+  sym = osl_symbols_clone(symbol);
+  clan_symbol_compact(sym, osl_scop_get_nb_parameters(scop));
+  sym_gen = osl_generic_shell(sym, osl_symbols_interface());
+  osl_generic_add(&scop->extension, sym_gen);
 }

@@ -40,6 +40,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
+#include <assert.h>
 
 #include <osl/macros.h>
 #include <osl/strings.h>
@@ -47,7 +48,10 @@
 #include <osl/relation.h>
 #include <osl/relation_list.h>
 #include <osl/extensions/arrays.h>
+#include <osl/extensions/symbols.h>
+#include <osl/extensions/symbol_rank.h>
 #include <clan/macros.h>
+#include <clan/relation.h>
 #include <clan/symbol.h>
 
 
@@ -59,174 +63,25 @@ void yyerror(char*);
  ******************************************************************************/
 
 
-/**
- * clan_symbol_print_structure function:
- * Displays a clan_symbol_t structure (*symbol) into a file (file, possibly
- * stdout) in a way that trends to be understandable without falling in a deep
- * depression or, for the lucky ones, getting a headache... It includes an
- * indentation level (level) in order to work with others print_structure
- * functions.
- * \param[in] file   File where informations are printed.
- * \param[in] symbol The symbol whose information have to be printed.
- * \param[in] level  Number of spaces before printing, for each line.
- */
-void clan_symbol_print_structure(FILE* file, clan_symbol_p symbol, int level) {
-  int i, j, first = 1, number = 1;
-
-  if (symbol != NULL) {
-    // Go to the right level.
-    for(j = 0; j < level; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "+-- clan_symbol_t (node %d)\n", number);
-  } else {
-    // Go to the right level.
-    for(j = 0; j < level; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "+-- NULL symbol\n");
-  }
-
-  while (symbol != NULL) {
-    if (!first) {
-      // Go to the right level.
-      for (j = 0; j < level; j++)
-        fprintf(file, "|\t");
-      fprintf(file, "|   clan_symbol_t (node %d)\n", number);
-    } else {
-      first = 0;
-    }
-
-    // A blank line.
-    for (j = 0; j <= level + 1; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "\n");
-
-    // Go to the right level and print the key.
-    for (j = 0; j <= level; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "Key: %d\n", symbol->key);
-
-    // A blank line.
-    for (j = 0; j <= level+1; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "\n");
-
-    // Print the identifier.
-    for (i = 0; i <= level; i++)
-      fprintf(file, "|\t");
-    if (symbol->identifier != NULL)
-      fprintf(file, "+-- Identifier: %s\n", symbol->identifier);
-    else
-      fprintf(file, "+-- No identifier\n");
-
-    // A blank line.
-    for(j = 0; j <= level + 1; j++)
-      fprintf(file, "|\t") ;
-    fprintf(file, "\n") ;
-
-    // Go to the right level and print the type.
-    for (j = 0; j <= level; j++)
-      fprintf(file, "|\t") ;
-    fprintf(file, "Type: ") ;
-    switch (symbol->type) {
-      case CLAN_TYPE_ITERATOR : fprintf(file, "Iterator\n");  break;
-      case CLAN_TYPE_PARAMETER: fprintf(file, "Parameter\n"); break;
-      case CLAN_TYPE_ARRAY    : fprintf(file, "Array\n");     break;
-      case CLAN_TYPE_FUNCTION : fprintf(file, "Function\n");  break;
-      default : fprintf(file, "Unknown\n") ;
-    }
-
-    // A blank line.
-    for (j = 0; j <= level + 1; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "\n");
-
-    // Go to the right level and print the rank.
-    for (j = 0; j <= level; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "Rank: %d\n", symbol->rank);
-
-    // A blank line.
-    for (j = 0; j <= level + 1; j++)
-      fprintf(file, "|\t");
-    fprintf(file, "\n");
-
-    symbol = symbol->next;
-    number++;
-
-    // Next line.
-    if (symbol != NULL) {
-      for (j = 0; j <= level; j++)
-        fprintf(file, "|\t");
-      fprintf(file, "V\n");
-    }
-  }
-
-  // The last line.
-  for(j = 0; j <= level; j++)
-    fprintf(file, "|\t");
-  fprintf(file, "\n");
-}
-
-
-/**
- * clan_symbol_print function:
- * This function prints the content of a clan_symbol_t structure (*symbol) into
- * a file (file, possibly stdout).
- * \param[in] file   File where informations are printed.
- * \param[in] symbol The symbol whose information have to be printed.
- */
-void clan_symbol_print(FILE* file, clan_symbol_p symbol) {
-  clan_symbol_print_structure(file, symbol, 0);
-}
-
-
-/*+****************************************************************************
- *                    Memory allocation/deallocation function                 *
- ******************************************************************************/
-
-
-/**
- * clan_symbol_malloc function:
- * This function allocates the memory space for a clan_symbol_t structure and
- * sets its fields with default values. Then it returns a pointer to the
- * allocated space.
- * \return A newly allocated symbol set with default values.
- */
-clan_symbol_p clan_symbol_malloc() {
-  clan_symbol_p symbol;
-
-  CLAN_malloc(symbol, clan_symbol_p, sizeof(clan_symbol_t));
-  symbol->key        = CLAN_UNDEFINED;
-  symbol->identifier = NULL;
-  symbol->type       = CLAN_UNDEFINED;
-  symbol->rank       = CLAN_UNDEFINED;
-  symbol->next       = NULL;
-
-  return symbol;
-}
-
-
-/**
- * clan_symbol_free function:
- * This function frees the allocated memory for a clan_symbol_t structure.
- * \param[in,out] symbol The pointer to the symbol we want to free.
- */
-void clan_symbol_free(clan_symbol_p symbol) {
-  clan_symbol_p next;
-
-  while (symbol != NULL) {
-    next = symbol->next;
-    free(symbol->identifier);
-    free(symbol);
-    symbol = next;
-  }
-}
-
-
 /*+****************************************************************************
  *                            Processing functions                            *
  ******************************************************************************/
 
+
+/**
+ * clan_symbol_get_identifier function:
+ * This function returns the textual identifier associated with the symbol
+ * provided as parameter. It returns NULL if unsuccessful.
+ * \param[in] symbol     Pointer to symbols whose identifier is needed.
+ * \return Pointer to the textual identifier
+ */
+char * clan_symbol_get_identifier(osl_symbols_p symbol) {
+  if(symbol==NULL || symbol->identifier==NULL)
+    return NULL;
+  osl_strings_p identifier = (osl_strings_p)symbol->identifier->data; 
+  assert(osl_strings_size(identifier)==1);
+  return identifier->string[0];
+}
 
 /**
  * clan_symbol_lookup function:
@@ -237,9 +92,11 @@ void clan_symbol_free(clan_symbol_p symbol) {
  * \param[in] identifier The identifier we are looking for.
  * \return The symbol corresponding to identifier, NULL if it doesn't exist.
  */
-clan_symbol_p clan_symbol_lookup(clan_symbol_p symbol, char* identifier) {
+osl_symbols_p clan_symbol_lookup(osl_symbols_p symbol, char* identifier) {
+  char *sym_identifier = NULL;
   while (symbol != NULL) {
-    if (strcmp(symbol->identifier, identifier) == 0)
+    sym_identifier = clan_symbol_get_identifier(symbol);
+    if (strcmp(sym_identifier, identifier) == 0)
       return symbol;
     else
       symbol = symbol->next;
@@ -257,9 +114,9 @@ clan_symbol_p clan_symbol_lookup(clan_symbol_p symbol, char* identifier) {
  * \param[in] key    The key of the searched symbol.
  * \return The symbol corresponding to the key, or NULL if it doesn't exist.
  */
-clan_symbol_p clan_symbol_lookup_by_key(clan_symbol_p symbol, int key) {
+osl_symbols_p clan_symbol_lookup_by_key(osl_symbols_p symbol, int key) {
   while (symbol != NULL) {
-    if (symbol->key == key)
+    if (symbol->tag == key)
       return symbol;
     else
       symbol = symbol->next;
@@ -275,12 +132,12 @@ clan_symbol_p clan_symbol_lookup_by_key(clan_symbol_p symbol, int key) {
  * \return A key which would be convenient for a new symbol.
  */
 static
-int clan_symbol_generate_new_key(clan_symbol_p table) {
+int clan_symbol_generate_new_key(osl_symbols_p table) {
   int key = CLAN_KEY_START;
   
   while (table != NULL) {
-    if (table->key >= key)
-      key = table->key + 1;
+    if (table->tag >= key)
+      key = table->tag + 1;
     table = table->next;
   }
   return key;
@@ -289,7 +146,7 @@ int clan_symbol_generate_new_key(clan_symbol_p table) {
 
 /**
  * clan_symbol_add function:
- * This function adds a new clan_symbol_t in the symbol table whose address
+ * This function adds a new osl_symbol_t in the symbol table whose address
  * is provided as a parameter. If the symbol table is empty (NULL), the new
  * node will become its first element. A new node is added only if an
  * existing node with the same identifier does not already exist. It returns
@@ -297,20 +154,23 @@ int clan_symbol_generate_new_key(clan_symbol_p table) {
  * \param[in,out] table      The address of the symbol table.
  * \param[in]     identifier The identifier of the symbol we want to add.
  * \param[in]     type       The new symbol type.
+ * \return                   Pointer to the found or added symbol.
  */
-clan_symbol_p clan_symbol_add(clan_symbol_p* table, char* identifier,
+osl_symbols_p clan_symbol_add(osl_symbols_p* table, char* identifier,
                               int type) {
-  clan_symbol_p symbol, tmp = *table;
+  osl_symbols_p symbol, tmp = *table;
+  osl_strings_p strings = NULL;
 
   // If the identifier is already in the table, do nothing.
   symbol = clan_symbol_lookup(*table, identifier);
   if (symbol != NULL)
     return symbol;
 
-  // Else, we allocate and fill a new clan_symbol_t node.
-  symbol = clan_symbol_malloc();
-  symbol->key = clan_symbol_generate_new_key(*table);
-  symbol->identifier = strdup(identifier);
+  // Else, we allocate and fill a new osl_symbol_t node.
+  symbol = osl_symbols_malloc();
+  symbol->tag = clan_symbol_generate_new_key(*table);
+  strings = osl_strings_encapsulate(strdup(identifier));
+  symbol->identifier = osl_generic_shell(strings, osl_strings_interface());
   symbol->type = type;
 
   // We put the new symbol at the end of the table.
@@ -335,10 +195,12 @@ clan_symbol_p clan_symbol_add(clan_symbol_p* table, char* identifier,
  * \param[in] identifier The identifier we want to know the key.
  * \return The key corresponding to the identifier or CLAN_UNDEFINED.
  */
-int clan_symbol_get_key(clan_symbol_p symbol, char* identifier) {
+int clan_symbol_get_key(osl_symbols_p symbol, char* identifier) {
+  char *sym_identifier = NULL;
   while (symbol != NULL) {
-    if (strcmp(symbol->identifier,identifier) == 0)
-      return symbol->key;
+    sym_identifier = clan_symbol_get_identifier(symbol);
+    if (strcmp(sym_identifier,identifier) == 0)
+      return symbol->tag;
     else
       symbol = symbol->next;
   }
@@ -348,21 +210,39 @@ int clan_symbol_get_key(clan_symbol_p symbol, char* identifier) {
 
 /**
  * clan_symbol_get_rank function:
- * This function returns the rank of the symbol with identifier "identifier"
- * in the symbol table whose first element is "symbol". If the symbol with
- * the specified identifier is not found, it returns -1.
- * \param[in] symbol     The first node of the list of symbols.
- * \param[in] identifier The identifier we want to know the key.
- * \return The rank corresponding to the identifier or CLAN_UNDEFINED.
+ * This function returns the rank of the symbol whose pointer is passed.
+ * \param[in] symbol     The node whose rank is requested.
+ * \return The rank corresponding to the symbol or CLAN_UNDEFINED.
  */
-int clan_symbol_get_rank(clan_symbol_p symbol, char* identifier) {
-  while (symbol != NULL) {
-    if (strcmp(symbol->identifier,identifier) == 0)
-      return symbol->rank;
-    else
-      symbol = symbol->next;
+int clan_symbol_get_rank(osl_symbols_p symbol) {
+  osl_symbol_rank_p srank = NULL;
+  if (symbol != NULL && symbol->extent != NULL) {
+    srank = (osl_symbol_rank_p)symbol->extent->data;
+    return osl_symbol_rank_get_rank(srank);
   }
   return CLAN_UNDEFINED;
+}
+
+/**
+ * clan_symbol_set_rank function:
+ * This function modifies the rank of the symbol whose pointer is passed.
+ * \param[in] symbol     The node whose rank is to be modified.
+ * \param[in] rank       The new value for the rank.
+ * \return The rank corresponding to the symbol or CLAN_UNDEFINED.
+ */
+void clan_symbol_set_rank(osl_symbols_p symbol, int rank) {
+  osl_symbol_rank_p srank = NULL;
+  if (symbol != NULL) {
+    if (symbol->extent != NULL) {
+      srank = (osl_symbol_rank_p)symbol->extent->data;
+      osl_symbol_rank_set_rank(srank, rank);
+    }
+    else{
+      osl_symbol_rank_p tmp = osl_symbol_rank_malloc();
+      tmp->rank = rank;
+      symbol->extent = osl_generic_shell(tmp, osl_symbol_rank_interface());
+    }
+  }
 }
 
 
@@ -375,9 +255,11 @@ int clan_symbol_get_rank(clan_symbol_p symbol, char* identifier) {
  * \param[in] identifier The identifier we want to know the type.
  * \return The type of the symbol corresponding to the identifier.
  */
-int clan_symbol_get_type(clan_symbol_p symbol, char* identifier) {
+int clan_symbol_get_type(osl_symbols_p symbol, char* identifier) {
+  char *sym_identifier = NULL;
   while (symbol != NULL) {
-    if (strcmp(symbol->identifier,identifier) == 0)
+    sym_identifier = clan_symbol_get_identifier(symbol);
+    if (strcmp(sym_identifier,identifier) == 0)
       return symbol->type;
     else
       symbol = symbol->next;
@@ -390,15 +272,16 @@ int clan_symbol_get_type(clan_symbol_p symbol, char* identifier) {
  * clan_symbol_array_to_strings function:
  * this functions builds (and returns a pointer to) an osl_strings_t
  * structure containing the symbol strings contained in an array of
- * symbols of length nb. The symbol string order is the same as the one
+ * symbols of length size. The symbol string order is the same as the one
  * in the symbol array.
  * \param[in] sarray The symbol array.
  * \param[in] size   The size of the symbol array.
  * \return An osl_strings_t containing all the symbol strings.
  */
-osl_strings_p clan_symbol_array_to_strings(clan_symbol_p* sarray, int size) {
+osl_strings_p clan_symbol_array_to_strings(osl_symbols_p* sarray, int size) {
   int i, length;
   char** identifiers = NULL;
+  char*  identifier  = NULL;
   osl_strings_p strings;
 
   // Allocate, initialize and NULL-terminate the array of strings.
@@ -408,9 +291,10 @@ osl_strings_p clan_symbol_array_to_strings(clan_symbol_p* sarray, int size) {
 
   // Fill the array of strings.
   for (i = 0; i < size; i++) {
-    length = strlen((sarray[i])->identifier) + 1;
+    identifier = clan_symbol_get_identifier(sarray[i]);
+    length = strlen(identifier) + 1;
     CLAN_malloc(identifiers[i], char*, length * sizeof(char));
-    strcpy(identifiers[i], (sarray[i])->identifier);
+    strcpy(identifiers[i], identifier);
   }
 
   // Build the osl_strings_t container.
@@ -427,9 +311,9 @@ osl_strings_p clan_symbol_array_to_strings(clan_symbol_p* sarray, int size) {
  * symbol table.
  * \param[in] symbol The top of the symbol table.
  * \param[in] type   The type of the elements.
- * \return The number of symbols of the provoded type in the symbol table.
+ * \return The number of symbols of the provided type in the symbol table.
  */
-int clan_symbol_nb_of_type(clan_symbol_p symbol, int type) {
+int clan_symbol_nb_of_type(osl_symbols_p symbol, int type) {
   int nb = 0;
   
   while (symbol != NULL) {
@@ -454,9 +338,10 @@ int clan_symbol_nb_of_type(clan_symbol_p symbol, int type) {
  * \param[in] type   The type of the elements.
  * \return An osl_generic_t with the symbol strings of the given type.
  */
-osl_generic_p clan_symbol_to_strings(clan_symbol_p symbol, int type) {
+osl_generic_p clan_symbol_to_strings(osl_symbols_p symbol, int type) {
   int i, length, nb_identifiers = 0;
   char** identifiers = NULL;
+  char*  identifier  = NULL;
   osl_strings_p strings;
   osl_generic_p generic;
 
@@ -474,9 +359,10 @@ osl_generic_p clan_symbol_to_strings(clan_symbol_p symbol, int type) {
   i = 0;
   while (symbol != NULL) {
     if (symbol->type == type) {
-      length = strlen(symbol->identifier) + 1;
+      identifier = clan_symbol_get_identifier(symbol);
+      length = strlen(identifier) + 1;
       CLAN_malloc(identifiers[i], char*, length * sizeof(char));
-      strcpy(identifiers[i], symbol->identifier);
+      strcpy(identifiers[i], identifier);
       i++;
     }
     symbol = symbol->next;
@@ -493,25 +379,6 @@ osl_generic_p clan_symbol_to_strings(clan_symbol_p symbol, int type) {
 
 
 /**
-* clan_symbol_clone_one function:
-* this function clones one symbol, i.e., it returns the clone of the symbol
-* provided as an argument only, with a next field set to NULL.
-* \param symbol The symbol to clone.
-* \return The clone of the symbol (and this symbol only).
-*/
-clan_symbol_p clan_symbol_clone_one(clan_symbol_p symbol) {
-  clan_symbol_p clone = clan_symbol_malloc();
-
-  if (symbol->identifier != NULL)
-    clone->identifier = strdup(symbol->identifier);
-  clone->type = symbol->type;
-  clone->rank = symbol->rank;
-
-  return clone;
-}
-
-
-/**
  * clan_symbol_to_arrays function:
  * this function generates an arrays extension from the symbol table
  * passed as an argument. It embeds it in an osl_generic_t structure
@@ -519,12 +386,12 @@ clan_symbol_p clan_symbol_clone_one(clan_symbol_p symbol) {
  * \param[in] symbol The symbol table.
  * \return An arrays structure with all the arrays of the symbol table.
  */
-osl_generic_p clan_symbol_to_arrays(clan_symbol_p symbol) {
+osl_generic_p clan_symbol_to_arrays(osl_symbols_p symbol) {
   int i;
   int nb_arrays = 0;
   osl_arrays_p arrays = NULL;
   osl_generic_p generic = NULL;
-  clan_symbol_p top = symbol;
+  osl_symbols_p top = symbol;
 
   // A first scan to know how many arrays there are.
   while (symbol != NULL) {
@@ -541,8 +408,8 @@ osl_generic_p clan_symbol_to_arrays(clan_symbol_p symbol) {
     symbol = top;
     i = 0;
     while (symbol != NULL) {
-      arrays->id[i] = symbol->key;
-      CLAN_strdup(arrays->names[i], symbol->identifier);
+      arrays->id[i] = symbol->tag;
+      CLAN_strdup(arrays->names[i], clan_symbol_get_identifier(symbol));
       i++;
       symbol = symbol->next;
     }
@@ -557,7 +424,7 @@ osl_generic_p clan_symbol_to_arrays(clan_symbol_p symbol) {
 
 /**
  * clan_symbol_new_iterator function:
- * this function return 1 if it succeeds to register (or to update) an
+ * this function returns 1 if it succeeds to register (or to update) an
  * iterator in the symbol table and to add it to the iterator array. It
  * returns 0 otherwise. The reason for failure can be that the symbol
  * is already in use for something else than an iterator.
@@ -567,22 +434,22 @@ osl_generic_p clan_symbol_to_arrays(clan_symbol_p symbol) {
  * \param[in]     depth The current loop depth.
  * \return 1 on success, 0 on failure.
  */
-int clan_symbol_new_iterator(clan_symbol_p* table, clan_symbol_p* array,
+int clan_symbol_new_iterator(osl_symbols_p* table, osl_symbols_p* array,
                              char* id, int depth) {
-  clan_symbol_p symbol;
-  symbol = clan_symbol_add(table, id, CLAN_TYPE_ITERATOR);
+  osl_symbols_p symbol;
+  symbol = clan_symbol_add(table, id, OSL_SYMBOL_TYPE_ITERATOR);
 
   // Ensure that the returned symbol was either a new one, or of the same type.
-  if (symbol->type != CLAN_TYPE_ITERATOR) {
+  if (symbol->type != OSL_SYMBOL_TYPE_ITERATOR) {
     yyerror("a loop iterator was previously used for something else");
     return 0;
   }
   
   // Update the rank, in case the symbol already exists.
-  if (symbol->rank != depth + 1)
-    symbol->rank = depth + 1;
+  if (clan_symbol_get_rank(symbol) != depth + 1)
+    clan_symbol_set_rank(symbol, depth + 1);
 
-  array[depth] = clan_symbol_clone_one(symbol);
+  array[depth] = osl_symbols_nclone(symbol, 1);
   return 1;
 }
 
@@ -601,11 +468,12 @@ int clan_symbol_new_iterator(clan_symbol_p* table, clan_symbol_p* array,
  * \param[in]     type   The new type for the symbol we want to update.
  * \return 1 on success, 0 on failure.
  */
-int clan_symbol_update_type(clan_symbol_p table, osl_relation_list_p access,
+int clan_symbol_update_type(osl_symbols_p table, osl_relation_list_p access,
                             int type) {
   int key;
   int relation_type;
-  clan_symbol_p symbol;
+  osl_symbols_p symbol;
+  osl_generic_p gen;
   
   if (table == NULL)
     CLAN_error("cannot even try to update type: NULL symbol table");
@@ -626,16 +494,113 @@ int clan_symbol_update_type(clan_symbol_p table, osl_relation_list_p access,
   if (symbol == NULL)
     CLAN_error("no symbol corresponding to the key");
 
-  if ((symbol->type == CLAN_TYPE_ITERATOR) && (type != CLAN_TYPE_ITERATOR)) {
+  if ((symbol->type == OSL_SYMBOL_TYPE_ITERATOR)
+      && (type != OSL_SYMBOL_TYPE_ITERATOR)) {
     yyerror("illegal use of an iterator (update or reference) in a statement");
     return 0;
   }
 
-  if ((symbol->type == CLAN_TYPE_PARAMETER) && (type != CLAN_TYPE_PARAMETER)) {
+  if ((symbol->type == OSL_SYMBOL_TYPE_PARAMETER)
+      && (type != OSL_SYMBOL_TYPE_PARAMETER)) {
     yyerror("illegal use of a parameter (update or reference) in a statement");
     return 0;
   }
 
   symbol->type = type;
+
+  if (symbol->type == OSL_SYMBOL_TYPE_ARRAY) {
+    if (symbol->extent != NULL)
+      osl_generic_free(symbol->extent);
+    gen = osl_generic_shell(osl_relation_clone(access->elt),
+                            osl_relation_interface());
+    symbol->extent = gen;
+  }
   return 1;
+}
+
+
+
+/**
+ * clan_symbol_extent_from_osl_relation function:
+ * During parsing, the array's access relation is stored in the "extent" field.
+ * this function removes the rows of teh access relation. 
+ * 
+ * \param[in,out] access  Access relation stored in extent 
+ * \return
+ */
+static void clan_symbol_extent_from_osl_relation(osl_relation_p access) {
+  int i = 0;
+  osl_relation_p extent = access;
+
+  for (i=1; i <= extent->nb_input_dims; i++){
+    osl_relation_remove_column(extent, extent->nb_output_dims+1);
+  }
+  for (i=0; i< extent->nb_output_dims-1; i++){
+    osl_relation_remove_row(extent, extent->nb_rows-1);
+  }
+  osl_relation_set_attributes(extent,
+                              access->nb_output_dims,
+                              0,
+                              access->nb_local_dims,
+                              access->nb_parameters);
+  return;
+}
+
+/**
+ * clan_symbol_compact function:
+ * this function compacts the dimensions of the symbol_extent (access relation) 
+ * in the symbol table.
+ * \param[in,out] symbol        The first symbol of the symbol table
+ * \param[in]     nb_parameters Number of parameters
+ * \return
+ */
+void clan_symbol_compact(osl_symbols_p symbol, int nb_parameters) {
+  while (symbol) {
+    if(symbol->type == OSL_SYMBOL_TYPE_ARRAY){
+      clan_relation_compact(symbol->extent->data, nb_parameters);
+      clan_symbol_extent_from_osl_relation(symbol->extent->data);
+    }
+    symbol = symbol->next;
+  }
+}
+
+/**
+ * clan_symbol_upate_array_dims function:
+ * Array dimensios are discovered one by one during parsing and updated
+ * respectively.
+ * This function updates replaces the old access relation (extent) for
+ * an array symbol, with the new one containing updated dimensions.
+ *
+ * \param[in,out] table The first symbol of the symbol table
+ * \param[in]     acc   Access relation containing updated dimensions
+ * \return
+ */
+void clan_symbol_upate_array_dims(osl_symbols_p table, osl_relation_p acc){
+  int key = -1;
+  int relation_type = -1;
+  osl_symbols_p symbol = NULL;
+  osl_generic_p gen = NULL;
+
+  // Get the key (with some cheating with the relation type to be able to use
+  // osl_relation_get_array_id), find the corresponding symbol and update.
+  relation_type = acc->type;
+  acc->type = OSL_TYPE_READ;
+  key = osl_relation_get_array_id(acc);
+  acc->type = relation_type;
+  symbol = clan_symbol_lookup_by_key(table, key);
+  if (symbol == NULL)
+    CLAN_error("no symbol corresponding to the key");
+
+  assert (symbol->type == OSL_SYMBOL_TYPE_ARRAY);
+
+  if (symbol->extent != NULL){
+    if(((osl_relation_p)symbol->extent->data)->nb_output_dims
+                                    >= acc->nb_output_dims)
+      return;
+    else
+      osl_generic_free(symbol->extent);
+  }
+  gen = osl_generic_shell(osl_relation_clone(acc),
+                            osl_relation_interface());
+  symbol->extent = gen;
 }

@@ -64,7 +64,7 @@ IS ((u|U)|(u|U)?(l|L|ll|LL)|(l|L|ll|LL)(u|U))
 
    extern int            parser_recording; /**< Do we record what we read? */
    extern char*          parser_record;    /**< What we record */
-   extern clan_symbol_p  parser_symbol;    /**< Top of the symbol table */
+   extern osl_symbols_p  parser_symbol;    /**< Top of the symbol table */
    extern clan_options_p parser_options;   /**< Clan options */
 
    int   scanner_parsing;                  /**< Do we parse or not? */

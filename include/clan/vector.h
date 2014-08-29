@@ -53,7 +53,7 @@ struct osl_vector;
 /*+****************************************************************************
  *                            Processing functions                            *
  ******************************************************************************/
-struct osl_vector* clan_vector_term(clan_symbol_p, int, char*, int);
+struct osl_vector* clan_vector_term(osl_symbols_p, int, char*, int);
 
 
 # if defined(__cplusplus)

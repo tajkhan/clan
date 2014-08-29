@@ -68,6 +68,7 @@ void             clan_scop_print_autopragma(FILE*, int,
                                             int (*)[CLAN_MAX_SCOPS]);
 void             clan_scop_simplify(struct osl_scop*);
 void             clan_scop_insert_pragmas(struct osl_scop*, char*, int);
+void             clan_scop_generate_symbols(struct osl_scop*, osl_symbols_p);
 
 
 # if defined(__cplusplus)

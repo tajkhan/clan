@@ -59,6 +59,7 @@
    #include <osl/body.h>
    #include <osl/extensions/arrays.h>
    #include <osl/extensions/extbody.h>
+   #include <osl/extensions/symbols.h>
    #include <osl/scop.h>
    #include <clan/macros.h>
    #include <clan/vector.h>
@@ -97,13 +98,13 @@
    // This is the "parser state", a collection of variables that vary
    // during the parsing and thanks to we can extract all SCoP informations.
    osl_scop_p     parser_scop;          /**< SCoP in construction */
-   clan_symbol_p  parser_symbol;        /**< Top of the symbol table */
+   osl_symbols_p  parser_symbol;        /**< Top of the symbol table */
    int            parser_recording;     /**< Boolean: do we record or not? */
    char*          parser_record;        /**< What we record (statement body)*/
    int            parser_loop_depth;    /**< Current loop depth */
    int            parser_if_depth;      /**< Current if depth */
    int*           parser_scattering;    /**< Current statement scattering */
-   clan_symbol_p* parser_iterators;     /**< Current iterator list */
+   osl_symbols_p* parser_iterators;     /**< Current iterator list */
    osl_relation_list_p parser_stack;    /**< Iteration domain stack */
    int*           parser_nb_local_dims; /**< Nb of local dims per depth */
    int            parser_nb_parameters; /**< Nb of parameter symbols */
@@ -245,9 +246,9 @@ scop:
 
       // Build the SCoP context.
       nb_parameters = clan_symbol_nb_of_type(parser_symbol,
-          CLAN_TYPE_PARAMETER);
+                      OSL_SYMBOL_TYPE_PARAMETER);
       scop->parameters = clan_symbol_to_strings(parser_symbol,
-          CLAN_TYPE_PARAMETER);
+                         OSL_SYMBOL_TYPE_PARAMETER);
       scop->context = clan_relation_build_context(nb_parameters,
                                                   parser_options);
       
@@ -276,10 +277,11 @@ scop:
       osl_generic_add(&scop->extension, arrays);
       clan_scop_generate_coordinates(scop, parser_options->name);
       clan_scop_generate_clay(scop, scanner_clay);
+      clan_scop_generate_symbols(scop, parser_symbol);
 
       // Add the SCoP to parser_scop and prepare the state for the next SCoP.
       osl_scop_add(&parser_scop, scop);
-      clan_symbol_free(parser_symbol);
+      osl_symbols_free(parser_symbol);
       clan_parser_state_initialize(parser_options);
       CLAN_debug_call(osl_scop_dump(stderr, scop));
     } 
@@ -321,7 +323,7 @@ statement:
         parser_column_start = scanner_column_LALR;
         parser_autoscop = CLAN_TRUE;
         // Reinitialize the symbol table.
-        clan_symbol_free(parser_symbol);
+        osl_symbols_free(parser_symbol);
         parser_symbol = NULL;
         if (CLAN_DEBUG)
           fprintf(stderr, "Autoscop start: line %3d column %3d\n",
@@ -591,7 +593,7 @@ loop_body:
     {
       CLAN_debug("rule loop_body.1: <stmt>");
       parser_loop_depth--;
-      clan_symbol_free(parser_iterators[parser_loop_depth]);
+      osl_symbols_free(parser_iterators[parser_loop_depth]);
       osl_relation_list_drop(&parser_stack);
       $$ = $1;
       parser_scattering[2*parser_loop_depth]++;
@@ -850,21 +852,21 @@ affine_condition:
 affine_primary_expression:
     ID
     {
-      clan_symbol_p id;
+      osl_symbols_p id;
 
       CLAN_debug("rule affine_primary_expression.1: id");
       id = clan_symbol_add(&parser_symbol, $1, CLAN_UNDEFINED);
       // An id in an affex can be either an iterator or a parameter. If it is
       // an unknown (embeds read-only variables), it is updated to a parameter.
       if (id->type == CLAN_UNDEFINED) {
-        id->type = CLAN_TYPE_PARAMETER;
-        id->rank = ++parser_nb_parameters;
+        id->type = OSL_SYMBOL_TYPE_PARAMETER;
+        clan_symbol_set_rank(id, ++parser_nb_parameters);
       }
 
-      if ((id->type != CLAN_TYPE_ITERATOR) &&
-          (id->type != CLAN_TYPE_PARAMETER)) {
+      if ((id->type != OSL_SYMBOL_TYPE_ITERATOR) &&
+          (id->type != OSL_SYMBOL_TYPE_PARAMETER)) {
         free($1);
-	if (id->type == CLAN_TYPE_ARRAY)
+	if (id->type == OSL_SYMBOL_TYPE_ARRAY)
 	  yyerror("variable or array reference in an affine expression");
 	else
           yyerror("function call in an affine expression");
@@ -1069,7 +1071,7 @@ primary_expression:
       int nb_columns;
       osl_relation_p id;
       osl_relation_list_p list;
-      clan_symbol_p symbol;
+      osl_symbols_p symbol;
 
       CLAN_debug("rule primary_expression.1: ID");
       symbol = clan_symbol_add(&parser_symbol, $1, CLAN_UNDEFINED);
@@ -1078,7 +1080,7 @@ primary_expression:
       id = osl_relation_pmalloc(parser_options->precision, 0, nb_columns);
       osl_relation_set_attributes(id, 0, parser_loop_depth, 0,
                                   CLAN_MAX_PARAMETERS);
-      clan_relation_tag_array(id, symbol->key);
+      clan_relation_tag_array(id, symbol->tag);
       list = osl_relation_list_malloc();
       list->elt = id;
 
@@ -1119,11 +1121,12 @@ postfix_expression:
         parser_access_length = strlen(parser_record) - parser_access_start;
 
       CLAN_debug("rule postfix_expression.2: postfix_expression [ <affex> ]");
-      if (!clan_symbol_update_type(parser_symbol, $1, CLAN_TYPE_ARRAY))
+      if (!clan_symbol_update_type(parser_symbol, $1, OSL_SYMBOL_TYPE_ARRAY))
         YYABORT;
       clan_relation_new_output_vector($1->elt, $3);
       osl_vector_free($3);
       $$ = $1;
+      clan_symbol_upate_array_dims(parser_symbol, $1->elt);
       CLAN_debug_call(osl_relation_list_dump(stderr, $$));
     }
   | postfix_expression '(' ')'
@@ -1134,7 +1137,7 @@ postfix_expression:
         parser_access_start = -1;
       }
 
-      if (!clan_symbol_update_type(parser_symbol, $1, CLAN_TYPE_FUNCTION))
+      if (!clan_symbol_update_type(parser_symbol, $1, OSL_SYMBOL_TYPE_FUNCTION))
         YYABORT;
       osl_relation_list_free($1);
       $$ = NULL;
@@ -1149,7 +1152,7 @@ postfix_expression:
     }
     argument_expression_list ')'
     {
-      if (!clan_symbol_update_type(parser_symbol, $1, CLAN_TYPE_FUNCTION))
+      if (!clan_symbol_update_type(parser_symbol, $1, OSL_SYMBOL_TYPE_FUNCTION))
         YYABORT;
       osl_relation_list_free($1);
       $$ = $4;
@@ -1159,13 +1162,13 @@ postfix_expression:
       if (parser_options->extbody)
         parser_access_length = strlen(parser_record) - parser_access_start;
 
-      clan_symbol_p symbol;
+      osl_symbols_p symbol;
 
       CLAN_debug("rule postfix_expression.4: postfix_expression . ID");
-      if (!clan_symbol_update_type(parser_symbol, $1, CLAN_TYPE_ARRAY))
+      if (!clan_symbol_update_type(parser_symbol, $1, OSL_SYMBOL_TYPE_ARRAY))
         YYABORT;
-      symbol = clan_symbol_add(&parser_symbol, $3, CLAN_TYPE_FIELD);
-      clan_relation_new_output_scalar($1->elt, symbol->key);
+      symbol = clan_symbol_add(&parser_symbol, $3, OSL_SYMBOL_TYPE_FIELD);
+      clan_relation_new_output_scalar($1->elt, symbol->tag);
       free($3);
       $$ = $1;
       CLAN_debug_call(osl_relation_list_dump(stderr, $$));
@@ -1175,13 +1178,13 @@ postfix_expression:
       if (parser_options->extbody)
         parser_access_length = strlen(parser_record) - parser_access_start;
 
-      clan_symbol_p symbol;
+      osl_symbols_p symbol;
 
       CLAN_debug("rule postfix_expression.5: postfix_expression -> ID");
-      if (!clan_symbol_update_type(parser_symbol, $1, CLAN_TYPE_ARRAY))
+      if (!clan_symbol_update_type(parser_symbol, $1, OSL_SYMBOL_TYPE_ARRAY))
         YYABORT;
-      symbol = clan_symbol_add(&parser_symbol, $3, CLAN_TYPE_FIELD);
-      clan_relation_new_output_scalar($1->elt, symbol->key);
+      symbol = clan_symbol_add(&parser_symbol, $3, OSL_SYMBOL_TYPE_FIELD);
+      clan_relation_new_output_scalar($1->elt, symbol->tag);
       free($3);
       $$ = $1;
       CLAN_debug_call(osl_relation_list_dump(stderr, $$));
@@ -1192,7 +1195,7 @@ postfix_expression:
 
       CLAN_debug("rule postfix_expression.6: postfix_expression -> "
 	         "postfix_expression ++/--");
-      if (!clan_symbol_update_type(parser_symbol, $1, CLAN_TYPE_ARRAY))
+      if (!clan_symbol_update_type(parser_symbol, $1, OSL_SYMBOL_TYPE_ARRAY))
         YYABORT;
       list = $1;
       // The last reference in the list is also written.
@@ -1231,7 +1234,7 @@ unary_expression:
 
       CLAN_debug("rule unary_expression.2: unary_expression -> "
 	         "++/-- unary_expression");
-      if (!clan_symbol_update_type(parser_symbol, $2, CLAN_TYPE_ARRAY))
+      if (!clan_symbol_update_type(parser_symbol, $2, OSL_SYMBOL_TYPE_ARRAY))
         YYABORT;
       list = $2;
       // The last reference in the list is also written.
@@ -1443,7 +1446,7 @@ assignment_expression:
 
       CLAN_debug("rule assignment_expression.2: unary_expression "
 	         "assignment_operator assignment_expression;");
-      if (!clan_symbol_update_type(parser_symbol, $1, CLAN_TYPE_ARRAY))
+      if (!clan_symbol_update_type(parser_symbol, $1, OSL_SYMBOL_TYPE_ARRAY))
         YYABORT;
       $$ = $1;
       // Accesses of $1 are READ except the last one which is a WRITE or both.
@@ -1451,7 +1454,7 @@ assignment_expression:
       list = $$;
       while (list->next != NULL)
         list = list->next;
-      if ($2 == CLAN_TYPE_RDWR) {
+      if ($2 == OSL_SYMBOL_TYPE_RDWR) {
         list->next = osl_relation_list_node(list->elt);
         list = list->next;
 
@@ -1468,9 +1471,9 @@ assignment_expression:
 
 assignment_operator:
     '='
-    { $$ = CLAN_TYPE_WRITE; }
+    { $$ = OSL_SYMBOL_TYPE_WRITE; }
   | assignment_rdwr_operator
-    { $$ = CLAN_TYPE_RDWR; }
+    { $$ = OSL_SYMBOL_TYPE_RDWR; }
   ;
 
 assignment_rdwr_operator:
@@ -1844,7 +1847,7 @@ void clan_parser_state_malloc(int precision) {
   CLAN_malloc(parser_nb_local_dims, int*, depth * sizeof(int));
   CLAN_malloc(parser_valid_else, int*, depth * sizeof(int));
   CLAN_malloc(parser_scattering, int*, (2 * depth + 1) * sizeof(int));
-  CLAN_malloc(parser_iterators, clan_symbol_p*, depth* sizeof(clan_symbol_p));
+  CLAN_malloc(parser_iterators, osl_symbols_p*, depth* sizeof(osl_symbols_p));
 }
 
 
@@ -1854,7 +1857,7 @@ void clan_parser_state_malloc(int precision) {
  * exception of the parser_scop.
  */
 void clan_parser_state_free() {
-  clan_symbol_free(parser_symbol);
+  osl_symbols_free(parser_symbol);
   free(parser_scattering);
   free(parser_iterators);
   free(parser_nb_local_dims);
@@ -1910,9 +1913,9 @@ void clan_parser_reinitialize() {
   int i;
   
   free(parser_record);
-  clan_symbol_free(parser_symbol);
+  osl_symbols_free(parser_symbol);
   for (i = 0; i < parser_loop_depth; i++)
-    clan_symbol_free(parser_iterators[i]);
+    osl_symbols_free(parser_iterators[i]);
   while (parser_stack->next != NULL)
     osl_relation_list_drop(&parser_stack);
   osl_scop_free(parser_scop);

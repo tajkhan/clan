@@ -45,6 +45,7 @@
 #include <clan/macros.h>
 #include <clan/symbol.h>
 #include <clan/vector.h>
+#include <osl/extensions/symbols.h>
 
 
 /*+****************************************************************************
@@ -64,10 +65,11 @@
  * \param[in] precision   Precision of the vector terms.
  * \return A vector corresponding to the symbol and its coefficient.
  */
-osl_vector_p clan_vector_term(clan_symbol_p symbol, int coefficient,
+osl_vector_p clan_vector_term(osl_symbols_p symbol, int coefficient,
                               char* identifier, int precision) {
   int rank, size;
   osl_vector_p vector;
+  osl_symbols_p temp = NULL;
 
   size = CLAN_MAX_DEPTH + CLAN_MAX_LOCAL_DIMS + CLAN_MAX_PARAMETERS + 2 ;
   vector = osl_vector_pmalloc(precision, size);
@@ -77,9 +79,11 @@ osl_vector_p clan_vector_term(clan_symbol_p symbol, int coefficient,
     osl_int_set_si(precision, &vector->v[size - 1], coefficient);
   } else {
     // The term is an iterator or a parameter coefficient
-    rank = clan_symbol_get_rank(symbol, identifier);
+    // get its rank
+    temp = clan_symbol_lookup(symbol, identifier);
+    rank = clan_symbol_get_rank(temp);
 
-    if (clan_symbol_get_type(symbol, identifier) == CLAN_TYPE_ITERATOR)
+    if (clan_symbol_get_type(symbol, identifier) == OSL_SYMBOL_TYPE_ITERATOR)
       osl_int_set_si(precision, &vector->v[rank], coefficient);
     else
       osl_int_set_si(precision,
